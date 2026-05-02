@@ -1,0 +1,43 @@
+services:
+  # ==================== SERVICIO MYSQL ====================
+  mysql:
+    image: mysql:8.0  # Imagen oficial de MySQL versión 8
+    container_name: progresofit-mysql
+    restart: always  # Si el contenedor se cae, se reinicia solo
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password  # Contraseña del usuario root
+      MYSQL_DATABASE: progresofit       # Base de datos que se crea automáticamente
+      MYSQL_USER: progresofit_user      # Usuario personalizado para tu app
+      MYSQL_PASSWORD: progresofit_pass  # Contraseña del usuario personalizado
+    ports:
+      - "3306:3306"  # Mapea el puerto 3306 del contenedor al 3306 de tu máquina
+    volumes:
+      - mysql_data:/var/lib/mysql  # Volumen para persistir datos de MySQL
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+  # ==================== SERVICIO BACKEND ====================
+  backend:
+    container_name: progresofit-backend
+    restart: always
+    build: .  # Construye la imagen usando el Dockerfile que creamos
+    ports:
+      - "3000:3000"  # Mapea el puerto 3000 del contenedor al 3000 de tu máquina
+    env_file:
+      - .env  # Carga las variables de entorno de tu archivo .env
+    environment:
+      # Sobrescribimos DB_HOST: en Docker, los servicios se comunican por nombre de servicio
+      DB_HOST: mysql
+      DB_USER: progresofit_user
+      DB_PASSWORD: progresofit_pass
+      DB_NAME: progresofit
+    depends_on:
+      mysql:
+        condition: service_healthy  # Espera a que MySQL esté realmente listo
+    volumes:
+      - ./:/app  # Monta tu proyecto local adentro del contenedor (para ver cambios en vivo)
+      - /app/node_modules  # Evita que tu node_modules local sobreescriba el del contenedor
+# ==================== VOLÚMENES ====================
+volumes:
+  mysql_data:  # Este volumen persiste los datos de MySQL aunque borres el contenedor

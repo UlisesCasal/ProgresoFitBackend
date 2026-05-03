@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from '../routes/authRoutes.js';
+import gimnasioRoutes from '../routes/gimnasioRoutes.js';
 
 dotenv.config();
 
@@ -11,8 +12,9 @@ const app = express();
 app.use(cors()); //Permite la conexión desde el frontend
 app.use(express.json()); // Parsea el body de las request a JSON
 
-//Rutas
+//Rutas por las que pasara mi App
 app.use('/auth', authRoutes);
+app.use('/gimnasios', gimnasioRoutes);
 
 //Ruta de prueba 
 app.get('/', (req, res) => {

@@ -5,36 +5,54 @@ API REST para la gestión de gimnasios, usuarios y autenticación. Desarrollada 
 ## 🚀 Cómo levantar el proyecto
 
 ### Pre-requisitos
-- Docker Desktop instalado
-- Node.js (para desarrollo local opcional)
+- Tener **Docker Desktop** instalado y corriendo (el ícono de la ballena debe estar verde en tu barra de tareas).
+- (Opcional) **Node.js** y **Git** instalados si querés correr sin Docker.
 
 ### Pasos
 
-1.  **Clonar el repositorio**
+1.  **Clonar el repositorio y entrar al directorio**
     ```bash
     git clone <tu-repo>
     cd ProgresoFitBackend
     ```
 
 2.  **Levantar los contenedores (MySQL + Backend)**
-    Este comando construye la imagen del backend y levanta la base de datos.
+    Este comando hace dos cosas:
+    - Construye la imagen de Node.js usando el `Dockerfile`.
+    - Crea dos contenedores: uno con MySQL y otro con tu Backend.
+    - La primera vez tarda unos minutos (descarga imágenes).
     ```bash
     docker compose up -d --build
     ```
 
 3.  **Verificar que esté funcionando**
-    Abrí en tu navegador: `http://localhost:3000/`
-    Deberías ver: `{"message":"API ProgresoFit funcionando 💪"}`
+    - Abrí en tu navegador: `http://localhost:3000/`
+    - Deberías ver: `{"message":"API ProgresoFit funcionando 💪"}`
+    - Si no responde, mirá los logs: `docker compose logs backend`
 
-4.  **Crear las tablas en la Base de Datos**
-    Usá **SQLTools** en VS Code o tu cliente MySQL preferido con estos datos:
+4.  **Restaurar la Base de Datos (Datos de ejemplo)**
+    El proyecto incluye el archivo `backup_progresofit.sql`. Para cargar la estructura y datos:
+    
+    a. Asegurate de que el contenedor de MySQL esté corriendo:
+    ```bash
+    docker compose ps
+    ```
+    
+    b. Ejecutá el restore dentro del contenedor:
+    ```bash
+    docker exec -i progresofit-mysql mysql -u root -proot_password progresofit < backup_progresofit.sql
+    ```
+    *(Nota: Esto carga los datos que el dueño del repo ya tenía preparados).*
+
+5.  **(Alternativa) Crear las tablas vacías manualmente**
+    Si no querés usar el backup, podés crear las tablas vos mismo con un cliente MySQL (SQLTools, DBeaver, Workbench) usando estos datos de conexión:
     - **Host**: `localhost`
     - **Port**: `3306`
     - **User**: `progresofit_user`
     - **Password**: `progresofit_pass`
     - **Database**: `progresofit`
 
-    Ejecutá estos Scripts:
+    Y ejecutando estos Scripts:
     ```sql
     -- Tabla Usuarios
     CREATE TABLE IF NOT EXISTS usuarios (

@@ -239,3 +239,30 @@ Si apagás los contenedores (`docker compose stop`), **NO se pierde el esquema n
 - `mysql_data:/var/lib/mysql`
 
 Solo se pierden los datos si hacés `docker compose down -v` (el flag `-v` borra los volúmenes).
+
+---
+
+## 📥 Cómo restaurar la Base de Datos (Para compañeros)
+
+Este repositorio incluye el archivo `backup_progresofit.sql` con la estructura y datos de ejemplo.
+
+### Pasos para restaurar:
+
+1.  **Levantar solo la base de datos primero:**
+    ```bash
+    docker compose up -d mysql
+    ```
+    Esperá a que esté "healthy" (podés chequear con `docker compose ps`).
+
+2.  **Importar el backup dentro del contenedor:**
+    ```bash
+    docker exec -i progresofit-mysql mysql -u root -proot_password progresofit < backup_progresofit.sql
+    ```
+
+3.  **Levantar el backend:**
+    ```bash
+    docker compose up -d backend
+    ```
+
+### O si preferís crear la BD desde cero:
+Usá los scripts SQL que están en la sección **"Cómo levantar el proyecto"** al principio de este README.

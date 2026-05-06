@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from '../routes/authRoutes.js';
 import gimnasioRoutes from '../routes/gimnasioRoutes.js';
+import usuarioRoutes from '../routes/usuarioRoutes.js';
 
 dotenv.config();
 
@@ -15,10 +16,11 @@ app.use(express.json()); // Parsea el body de las request a JSON
 //Rutas por las que pasara mi App
 app.use('/auth', authRoutes);
 app.use('/gimnasios', gimnasioRoutes);
+app.use('/usuarios', usuarioRoutes);
 
-//Ruta de prueba 
+//Ruta de prueba
 app.get('/', (req, res) => {
-  res.json({ message: 'API ProgresoFit funcionando'});
+  res.json({ message: 'API ProgresoFit funcionando' });
 });
 
 

@@ -1,286 +1,396 @@
-# 🏋️ ProgresoFit Backend API
+# ProgresoFit Backend API
 
-API REST para la gestión de gimnasios, usuarios y autenticación. Desarrollada en Node.js + Express con MySQL y Docker.
+API REST para la gestión de gimnasios y usuarios. Desarrollada en Node.js + Express con MySQL y Docker.
 
-## 🚀 Cómo levantar el proyecto
+---
+
+## Cómo levantar el proyecto
 
 ### Pre-requisitos
-- Tener **Docker Desktop** instalado y corriendo (el ícono de la ballena debe estar verde en tu barra de tareas).
-- (Opcional) **Node.js** y **Git** instalados si querés correr sin Docker.
+- **Docker Desktop** instalado y corriendo.
+- (Opcional) **Node.js** si querés correr sin Docker.
 
 ### Pasos
 
-1.  **Clonar el repositorio y entrar al directorio**
-    ```bash
-    git clone <tu-repo>
-    cd ProgresoFitBackend
-    ```
+1. **Clonar el repositorio**
+   ```bash
+   git clone <tu-repo>
+   cd ProgresoFitBackend
+   ```
 
-2.  **Levantar los contenedores (MySQL + Backend)**
-    Este comando hace dos cosas:
-    - Construye la imagen de Node.js usando el `Dockerfile`.
-    - Crea dos contenedores: uno con MySQL y otro con tu Backend.
-    - La primera vez tarda unos minutos (descarga imágenes).
-    ```bash
-    docker compose up -d --build
-    ```
+2. **Levantar los contenedores**
+   ```bash
+   docker compose up -d --build
+   ```
+   La primera vez tarda unos minutos (descarga imágenes de Node y MySQL).
 
-3.  **Verificar que esté funcionando**
-    - Abrí en tu navegador: `http://localhost:3000/`
-    - Deberías ver: `{"message":"API ProgresoFit funcionando 💪"}`
-    - Si no responde, mirá los logs: `docker compose logs backend`
+3. **Verificar que esté funcionando**
+   ```bash
+   curl http://localhost:3000/
+   # {"message":"API ProgresoFit funcionando"}
+   ```
+   Si no responde: `docker compose logs backend`
 
-4.  **Restaurar la Base de Datos (Datos de ejemplo)**
-    El proyecto incluye el archivo `backup_progresofit.sql`. Para cargar la estructura y datos:
-    
-    a. Asegurate de que el contenedor de MySQL esté corriendo:
-    ```bash
-    docker compose ps
-    ```
-    
-    b. Ejecutá el restore dentro del contenedor:
-    ```bash
-    docker exec -i progresofit-mysql mysql -u root -proot_password progresofit < backup_progresofit.sql
-    ```
-    *(Nota: Esto carga los datos que el dueño del repo ya tenía preparados).*
+4. **Restaurar la base de datos**
+   ```bash
+   docker compose up -d mysql          # Levantá solo MySQL primero
+   docker compose ps                   # Esperá a que esté "healthy"
+   docker compose up -d backend        # Levantá el backend
+   # Importar datos de ejemplo:
+   docker exec -i progresofit-mysql mysql -u root -proot_password progresofit < backup_progresofit.sql
+   ```
 
-5.  **(Alternativa) Crear las tablas vacías manualmente**
-    Si no querés usar el backup, podés crear las tablas vos mismo con un cliente MySQL (SQLTools, DBeaver, Workbench) usando estos datos de conexión:
-    - **Host**: `localhost`
-    - **Port**: `3306`
-    - **User**: `progresofit_user`
-    - **Password**: `progresofit_pass`
-    - **Database**: `progresofit`
+5. **(Alternativa) Crear las tablas manualmente**
 
-    Y ejecutando estos Scripts:
-    ```sql
-    -- Tabla Usuarios
-    CREATE TABLE IF NOT EXISTS usuarios (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      email VARCHAR(255) UNIQUE NOT NULL,
-      password VARCHAR(255) NOT NULL,
-      rol ENUM('ADMIN', 'ENTRENADOR', 'ALUMNO') NOT NULL DEFAULT 'ALUMNO',
-      gimnasio_id INT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
+   Conectate con cualquier cliente MySQL (`localhost:3306`, usuario `progresofit_user`, password `progresofit_pass`, base `progresofit`) y ejecutá:
 
-    -- Tabla Gimnasios
-    CREATE TABLE IF NOT EXISTS gimnasios (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      nombre VARCHAR(255) NOT NULL,
-      direccion TEXT,
-      horarios TEXT,
-      activo BOOLEAN DEFAULT TRUE,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    ```
+   ```sql
+   CREATE TABLE IF NOT EXISTS usuarios (
+     id         INT AUTO_INCREMENT PRIMARY KEY,
+     nombre     VARCHAR(255)                            NULL,
+     email      VARCHAR(255)                      NOT NULL UNIQUE,
+     password   VARCHAR(255)                      NOT NULL,
+     rol        ENUM('ADMIN','ENTRENADOR','ALUMNO') NOT NULL DEFAULT 'ALUMNO',
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+   );
+
+   CREATE TABLE IF NOT EXISTS gimnasios (
+     id         INT AUTO_INCREMENT PRIMARY KEY,
+     nombre     VARCHAR(255)  NOT NULL,
+     direccion  TEXT,
+     horarios   TEXT,
+     activo     BOOLEAN DEFAULT TRUE,
+     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+   );
+   ```
+
+   > **Si ya tenés la BD corriendo** y necesitás agregar la columna `nombre`:
+   > ```sql
+   > ALTER TABLE usuarios ADD COLUMN nombre VARCHAR(255) DEFAULT NULL AFTER id;
+   > ```
 
 ---
 
-## 🔐 Autenticación (JWT)
+## Autenticación (JWT)
 
-La API usa **JSON Web Tokens (JWT)** para proteger las rutas.
+La API usa **JSON Web Tokens**. El flujo es:
 
-### Flujo:
-1.  El usuario hace **Login**.
-2.  El backend devuelve un `token` (string encriptado).
-3.  El frontend debe guardar ese token (en `localStorage` o `cookie`).
-4.  Para las rutas protegidas, el frontend debe enviar el token en el header:
-    ```
-    Authorization: Bearer <TU_TOKEN_AQUI>
-    ```
+1. Hacés login → el backend devuelve un `token`.
+2. Guardás el token en el cliente.
+3. En cada request protegido lo enviás en el header:
+   ```
+   Authorization: Bearer <TOKEN>
+   ```
 
 ---
 
-## 📡 Endpoints Disponibles
+## Endpoints
 
-### 1. Autenticación (`/auth`)
+### Auth `/auth`
 
 #### `POST /auth/register`
-Registra un nuevo usuario.
-- **Protegido**: NO
-- **Body (JSON)**:
-    ```json
-    {
-      "email": "usuario@test.com",
-      "password": "123456",
-      "rol": "ALUMNO" 
-    }
-    ```
-  > *Nota: El rol es opcional, por defecto es ALUMNO. Para crear gimnasios, necesitás rol ADMIN.*
+Registra un usuario. Útil para crear el primer ADMIN en desarrollo.
 
-#### `POST /auth/login`
-Devuelve un token JWT y los datos del usuario.
 - **Protegido**: NO
-- **Body (JSON)**:
-    ```json
-    {
-      "email": "usuario@test.com",
-      "password": "123456"
-    }
-    ```
-- **Respuesta exitosa**:
-    ```json
-    {
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-      "user": {
-        "id": 1,
-        "email": "usuario@test.com",
-        "rol": "ADMIN"
-      }
-    }
-    ```
-
-#### `POST /auth/logout`
-Endpoint para consistencia de API (El frontend debe borrar el token).
-- **Protegido**: SÍ (Requiere Token)
-- **Headers**: `Authorization: Bearer <TOKEN>`
+- **Body**:
+  ```json
+  {
+    "email": "admin@test.com",
+    "password": "admin123",
+    "rol": "ADMIN"
+  }
+  ```
+  > `rol` es opcional, por defecto `ALUMNO`. Valores posibles: `ADMIN`, `ENTRENADOR`, `ALUMNO`.
+- **Respuesta 201**:
+  ```json
+  {
+    "message": "Usuario registrado exitosamente",
+    "user": { "id": 1, "email": "admin@test.com", "rol": "ADMIN" }
+  }
+  ```
+- **Errores**: `400` email ya registrado · `400` email o password faltante
 
 ---
 
-### 2. Gimnasios (`/gimnasios`)
+#### `POST /auth/login`
+Devuelve un token JWT.
+
+- **Protegido**: NO
+- **Body**:
+  ```json
+  { "email": "admin@test.com", "password": "admin123" }
+  ```
+- **Respuesta 200**:
+  ```json
+  {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "user": { "id": 1, "email": "admin@test.com", "rol": "ADMIN" }
+  }
+  ```
+- **Errores**: `401` credenciales inválidas · `400` email o password faltante
+
+---
+
+#### `POST /auth/logout`
+Endpoint de consistencia. El cliente es responsable de descartar el token.
+
+- **Protegido**: SÍ
+- **Respuesta 200**:
+  ```json
+  { "message": "Logout exitoso. Eliminá el token del cliente" }
+  ```
+- **Errores**: `401` token no proporcionado · `403` token inválido o expirado
+
+---
+
+### Usuarios `/usuarios`
+
+#### `POST /usuarios/alumno`
+Registra un nuevo alumno. Endpoint público para el formulario de registro.
+
+- **Protegido**: NO
+- **Body**:
+  ```json
+  {
+    "nombre": "Juan Pérez",
+    "email": "juan@test.com",
+    "password": "123456"
+  }
+  ```
+  > `nombre` es opcional.
+- **Respuesta 201**:
+  ```json
+  {
+    "message": "Alumno registrado exitosamente",
+    "user": { "id": 3, "nombre": "Juan Pérez", "email": "juan@test.com", "rol": "ALUMNO" }
+  }
+  ```
+- **Errores**: `400` email ya registrado · `400` email o password faltante
+
+---
+
+#### `POST /usuarios/entrenador`
+Crea un nuevo entrenador. Solo puede ejecutarlo un ADMIN.
+
+- **Protegido**: SÍ + **Rol ADMIN**
+- **Body**:
+  ```json
+  {
+    "nombre": "Carlos López",
+    "email": "carlos@test.com",
+    "password": "abc123"
+  }
+  ```
+  > `nombre` es opcional.
+- **Respuesta 201**:
+  ```json
+  {
+    "message": "Entrenador creado exitosamente",
+    "user": { "id": 4, "nombre": "Carlos López", "email": "carlos@test.com", "rol": "ENTRENADOR" }
+  }
+  ```
+- **Errores**: `401` sin token · `403` token inválido · `400` email ya registrado · `400` rol insuficiente
+
+---
+
+#### `GET /usuarios/:id`
+Devuelve el perfil básico de un usuario.
+
+- **Protegido**: SÍ (cualquier rol)
+- **Respuesta 200**:
+  ```json
+  {
+    "id": 3,
+    "nombre": "Juan Pérez",
+    "email": "juan@test.com",
+    "rol": "ALUMNO",
+    "created_at": "2026-05-06T17:56:51.000Z"
+  }
+  ```
+- **Errores**: `404` usuario no encontrado · `401` sin token
+
+---
+
+### Gimnasios `/gimnasios`
 
 #### `GET /gimnasios`
 Lista todos los gimnasios activos. Soporta búsqueda por nombre.
-- **Protegido**: SÍ (Cualquier usuario logueado)
-- **Query Params (Opcional)**: `?search=Central`
-- **Headers**: `Authorization: Bearer <TOKEN>`
+
+- **Protegido**: SÍ (cualquier rol)
+- **Query params**: `?search=Central` (opcional)
+- **Respuesta 200**:
+  ```json
+  [
+    { "id": 1, "nombre": "Gimnasio Central", "direccion": "Av. Ejemplo 123", "horarios": "24hs", "activo": 1 }
+  ]
+  ```
+
+---
 
 #### `GET /gimnasios/:id`
-Obtiene un gimnasio por su ID.
-- **Protegido**: SÍ
-- **Headers**: `Authorization: Bearer <TOKEN>`
+Devuelve un gimnasio por ID (solo activos).
+
+- **Protegido**: SÍ (cualquier rol)
+- **Respuesta 200**:
+  ```json
+  { "id": 1, "nombre": "Gimnasio Central", "direccion": "Av. Ejemplo 123", "horarios": "24hs", "activo": 1 }
+  ```
+- **Errores**: `404` no encontrado o dado de baja
+
+---
 
 #### `POST /gimnasios`
 Crea un nuevo gimnasio.
-- **Protegido**: SÍ + **Rol ADMIN requerido**
-- **Headers**: `Authorization: Bearer <TOKEN>`, `Content-Type: application/json`
-- **Body (JSON)**:
-    ```json
-    {
-      "nombre": "Gimnasio Central",
-      "direccion": "Av. Siempre Viva 123",
-      "horarios": "Lun-Vie 08:00-22:00"
-    }
-    ```
 
-#### `PUT /gimnasios/:id`
-Actualiza un gimnasio existente.
-- **Protegido**: SÍ + **Rol ADMIN requerido**
-- **Headers**: `Authorization: Bearer <TOKEN>`, `Content-Type: application/json`
-- **Body (JSON)**:
-    ```json
-    {
-      "nombre": "Gimnasio Central Editado",
-      "direccion": "Nueva Dirección 456"
-    }
-    ```
-
-#### `DELETE /gimnasios/:id`
-Baja lógica (no borra el registro, solo lo marca como `activo = FALSE`).
-- **Protegido**: SÍ + **Rol ADMIN requerido**
-- **Headers**: `Authorization: Bearer <TOKEN>`
+- **Protegido**: SÍ + **Rol ADMIN**
+- **Body**:
+  ```json
+  {
+    "nombre": "Gimnasio Norte",
+    "direccion": "Ruta 9 km 5",
+    "horarios": "Lun-Sab 07:00-21:00"
+  }
+  ```
+  > `direccion` y `horarios` son opcionales.
+- **Respuesta 201**:
+  ```json
+  { "id": 2, "nombre": "Gimnasio Norte", "direccion": "Ruta 9 km 5", "horarios": "Lun-Sab 07:00-21:00", "activo": true }
+  ```
+- **Errores**: `400` nombre faltante · `403` sin permiso
 
 ---
 
-## 🧪 Ejemplos de Consumo con `curl`
+#### `PUT /gimnasios/:id`
+Actualiza los datos de un gimnasio.
 
-### 1. Login y obtención de Token
+- **Protegido**: SÍ + **Rol ADMIN**
+- **Body** (todos los campos son enviados, los vacíos se guardan como vacíos):
+  ```json
+  {
+    "nombre": "Gimnasio Norte Editado",
+    "direccion": "Nueva Dirección 456",
+    "horarios": "24hs"
+  }
+  ```
+- **Respuesta 200**:
+  ```json
+  { "id": 2, "nombre": "Gimnasio Norte Editado", "direccion": "Nueva Dirección 456", "horarios": "24hs" }
+  ```
+- **Errores**: `403` sin permiso
+
+---
+
+#### `DELETE /gimnasios/:id`
+Baja lógica: marca el gimnasio como `activo = FALSE`. No elimina el registro.
+
+- **Protegido**: SÍ + **Rol ADMIN**
+- **Respuesta 200**:
+  ```json
+  { "message": "Gimnasio dado de baja lógicamente" }
+  ```
+- **Errores**: `403` sin permiso
+
+---
+
+## Códigos de respuesta
+
+| Código | Cuándo ocurre |
+|--------|---------------|
+| `200` | OK |
+| `201` | Recurso creado exitosamente |
+| `400` | Datos inválidos (campo faltante, email duplicado, rol insuficiente) |
+| `401` | Token no proporcionado |
+| `403` | Token inválido/expirado, o rol sin permiso para esa acción |
+| `404` | Recurso no encontrado |
+| `500` | Error interno del servidor |
+
+---
+
+## Ejemplos curl
+
 ```bash
+# 1. Registrar el primer admin (solo en desarrollo)
+curl -X POST http://localhost:3000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@test.com","password":"admin123","rol":"ADMIN"}'
+
+# 2. Login
 curl -X POST http://localhost:3000/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@test.com","password":"admin123"}'
-```
-*(Guardate el valor de "token" de la respuesta)*
+# Guardá el valor de "token"
 
-### 2. Crear un Gimnasio (usando el Token)
-```bash
+# 3. Registrar un alumno (sin token)
+curl -X POST http://localhost:3000/usuarios/alumno \
+  -H "Content-Type: application/json" \
+  -d '{"nombre":"Juan Pérez","email":"juan@test.com","password":"123456"}'
+
+# 4. Crear un entrenador (ADMIN)
+curl -X POST http://localhost:3000/usuarios/entrenador \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -d '{"nombre":"Carlos López","email":"carlos@test.com","password":"abc123"}'
+
+# 5. Ver perfil
+curl http://localhost:3000/usuarios/3 \
+  -H "Authorization: Bearer <TOKEN>"
+
+# 6. Listar gimnasios
+curl http://localhost:3000/gimnasios \
+  -H "Authorization: Bearer <TOKEN>"
+
+# 7. Buscar gimnasio por nombre
+curl "http://localhost:3000/gimnasios?search=Norte" \
+  -H "Authorization: Bearer <TOKEN>"
+
+# 8. Crear gimnasio (ADMIN)
 curl -X POST http://localhost:3000/gimnasios \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer AQUI_VA_EL_TOKEN_LARGO" \
+  -H "Authorization: Bearer <TOKEN>" \
   -d '{"nombre":"Gimnasio Norte","direccion":"Ruta 9","horarios":"24hs"}'
-```
 
-### 3. Listar Gimnasios
-```bash
-curl -X GET http://localhost:3000/gimnasios \
-  -H "Authorization: Bearer AQUI_VA_EL_TOKEN_LARGO"
-```
-
----
-
-## 🚨 Códigos de Error Comunes
-
-| Código | Significado | Causa probable |
-|--------|--------------|----------------|
-| **401 Unauthorized** | No autenticado | Falta el header `Authorization` o el token expiró. |
-| **403 Forbidden** | No autorizado | Sos ALUMNO y querés hacer algo de ADMIN. |
-| **400 Bad Request** | Datos inválidos | Falta el email/password o el email ya existe. |
-| **404 Not Found** | No encontrado | El ID de gimnasio no existe o está dado de baja. |
-
----
-
-## 🛑 Cómo detener todo
-
-```bash
-docker compose down
-```
-
-Si querés borrar también la base de datos (cuidado, se pierden los datos):
-```bash
-docker compose down -v
+# 9. Dar de baja un gimnasio (ADMIN)
+curl -X DELETE http://localhost:3000/gimnasios/2 \
+  -H "Authorization: Bearer <TOKEN>"
 ```
 
 ---
 
-## 🏗️ Estructura del Proyecto (Arquitectura de 4 capas)
+## Estructura del proyecto
 
 ```
 src/
- └── server.js             # Entrada de la app (Express)
-routes/                   # Define las URLs y middlewares de autenticación
-controllers/              # Maneja requests/respuestas HTTP
-services/                 # Lógica de negocio (valida permisos/roles)
-repositories/             # Acceso a datos (SQL puro)
-models/                   # Referencias de tablas
+ └── server.js               # Entry point de Express
+routes/
+ ├── authRoutes.js           # /auth
+ ├── gimnasioRoutes.js       # /gimnasios
+ └── usuarioRoutes.js        # /usuarios
+controllers/
+ ├── authController.js
+ ├── gimnasioController.js
+ └── usuarioController.js
+services/
+ ├── authService.js          # Lógica de registro y login
+ ├── gimnasioService.js      # Lógica y validaciones de gimnasios
+ └── usuarioService.js       # Lógica y validaciones de usuarios
+repositories/
+ ├── gimnasioRepository.js   # SQL de gimnasios
+ └── usuarioRepository.js    # SQL de usuarios
+middleware/
+ └── authMiddleware.js       # authenticateToken + checkRole
 database/
- └── connection.js        # Pool de conexiones a MySQL
-docker-compose.yml        # Orquestación de Backend + MySQL
-Dockerfile                # Imagen de Node.js
+ └── connection.js           # Pool de conexiones MySQL
+docker-compose.yml
+Dockerfile
+backup_progresofit.sql
 ```
 
 ---
 
-## 💾 Sobre la persistencia de datos (Volúmenes)
+## Persistencia de datos
 
-Si apagás los contenedores (`docker compose stop`), **NO se pierde el esquema ni los datos** porque usamos un volumen de Docker:
-- `mysql_data:/var/lib/mysql`
+Los datos de MySQL se guardan en un volumen de Docker (`mysql_data`).
 
-Solo se pierden los datos si hacés `docker compose down -v` (el flag `-v` borra los volúmenes).
-
----
-
-## 📥 Cómo restaurar la Base de Datos (Para compañeros)
-
-Este repositorio incluye el archivo `backup_progresofit.sql` con la estructura y datos de ejemplo.
-
-### Pasos para restaurar:
-
-1.  **Levantar solo la base de datos primero:**
-    ```bash
-    docker compose up -d mysql
-    ```
-    Esperá a que esté "healthy" (podés chequear con `docker compose ps`).
-
-2.  **Importar el backup dentro del contenedor:**
-    ```bash
-    docker exec -i progresofit-mysql mysql -u root -proot_password progresofit < backup_progresofit.sql
-    ```
-
-3.  **Levantar el backend:**
-    ```bash
-    docker compose up -d backend
-    ```
-
-### O si preferís crear la BD desde cero:
-Usá los scripts SQL que están en la sección **"Cómo levantar el proyecto"** al principio de este README.
+- `docker compose stop` → los datos se conservan.
+- `docker compose down` → los contenedores se borran pero los datos se conservan.
+- `docker compose down -v` → **borra también los datos** (cuidado).

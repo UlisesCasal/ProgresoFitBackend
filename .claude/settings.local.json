@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(docker compose *)",
+      "Bash(docker exec *)",
+      "Bash(docker cp *)",
+      "Bash(curl -s -X GET http://localhost:3000/)",
+      "Bash(python -m json.tool)",
+      "Bash(curl -s http://localhost:3000/)",
+      "Bash(curl *)"
+    ]
+  }
+}
